@@ -1,9 +1,6 @@
-# ai-log-question-answer-system
-
-TrafficLog-AI-QA
-
+ai-log-question-answer-system
+Trafik Logları AI Soru-Cevap Sistemi
 Proje Açıklaması
-
 Bu proje, web trafik günlüklerini kullanarak AI tabanlı bir soru-cevap sisteminin geliştirilmesini içerir. Sistem, verilen web trafik günlüklerine dayalı olarak soruları yanıtlamak için bir Retrieval-Augmented Generation (RAG) modelini kullanır. Proje, veri hazırlığı ve ön işleme, RAG model kurulumunu, sistem entegrasyonunu ve testini içerir.
 
 Proje Adımları
@@ -28,14 +25,11 @@ Gerekli Kütüphaneleri Kurma
 
 Python ve gerekli kütüphaneleri kurmak için aşağıdaki komutları kullanın:
 
-
-pip install pandas re scikit-learn faiss-cpu numpy transformers
+pip install pandas scikit-learn faiss-cpu numpy transformers
 Kodunuzu Çalıştırma
 
 Kodunuzu çalıştırmak için aşağıdaki adımları izleyin:
 
-main.py dosyasını açın ve gerekli verileri yükleyin.
-Veri analizi ve model eğitimi için gerekli fonksiyonları çağırın.
 
 python main.py
 Kod Yapısı
@@ -53,7 +47,6 @@ answer = get_answer(question)
 print(answer)
 Testler
 Projede yer alan testler, modelin performansını ve yanıt doğruluğunu değerlendirmek için yapılmıştır. Testler hakkında daha fazla bilgiye tests/ dizininde bulunan dosyalardan ulaşabilirsiniz.
-
 
 İletişim
 Proje ile ilgili sorularınız veya geri bildirimleriniz için cagcimertali@gmail.com adresine ulaşabilirsiniz.
