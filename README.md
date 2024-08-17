@@ -28,8 +28,7 @@ Gerekli Kütüphaneleri Kurma
 
 Python ve gerekli kütüphaneleri kurmak için aşağıdaki komutları kullanın:
 
-bash
-Copy code
+
 pip install pandas re scikit-learn faiss-cpu numpy transformers
 Kodunuzu Çalıştırma
 
@@ -37,8 +36,7 @@ Kodunuzu çalıştırmak için aşağıdaki adımları izleyin:
 
 main.py dosyasını açın ve gerekli verileri yükleyin.
 Veri analizi ve model eğitimi için gerekli fonksiyonları çağırın.
-python
-Copy code
+
 python main.py
 Kod Yapısı
 data_preparation.py: Veri hazırlığı ve ön işleme işlemleri.
