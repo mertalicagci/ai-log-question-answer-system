@@ -14,10 +14,10 @@ log_verileri = """
 192.168.1.4 - - [10/Aug/2024:14:57:50 +0000] "GET /contact.html HTTP/1.1" 200 234
 """
 
-# Log verilerini satırlara ayır
+# Logların satır biçiminde verilmesi
 log_satirlari = log_verileri.strip().split('\n')
 
-# RegEx desenini tek satırda tanımla
+# Regex deseninin tanımlanması
 log_pattern = r'(\S+) - - \[.*?\] "(.*?)" (\d{3}) (\d+)'
 log_girisleri = []
 
@@ -27,28 +27,28 @@ for satir in log_satirlari:
         ip_adresi, istek, durum_kodu, boyut = eslesen.groups()
         log_girisleri.append([ip_adresi, istek, int(durum_kodu), int(boyut)])
 
-# DataFrame oluştur
+# DataFrame'nin  tanımlaması
 log_df = pd.DataFrame(log_girisleri, columns=['IP_Adresi', 'Istek', 'Durum_Kodu', 'Boyut'])
 
-# Veri temizleme
+# Verinin temizlenme aşaması
 log_df = log_df.dropna()
 log_df = log_df[log_df['IP_Adresi'].str.match(r'\d+\.\d+\.\d+\.\d+')]
 log_df['Boyut'] = log_df['Boyut'].astype(int)
 
-# 'Istek' sütununu vektörize et
+# Tabloda yer alan istek sütununu vektörize edilmesi
 vektorleyici = TfidfVectorizer()
 istek_vektorleri = vektorleyici.fit_transform(log_df['Istek']).toarray()
 
-# FAISS endiksi oluştur
+# FAISS endeksi oluşturulması
 boyut = istek_vektorleri.shape[1]
 faiss_endeksi = faiss.IndexFlatL2(boyut)
 
-# Vektörleri FAISS endeksine ekle
+# Oluşturduğum vektörlerin FAISS endeksine eklenmesi
 faiss_endeksi.add(istek_vektorleri)
 
-# T5 modelini yükle
+# T5 modelini yükleme, tokenin ve modelin tanımlanması
 model_adi = 't5-small'
-tokenizer = T5Tokenizer.from_pretrained(model_adi, legacy=False)  # Yeni davranış biçimini kullan
+tokenizer = T5Tokenizer.from_pretrained(model_adi, legacy=False)
 model = T5ForConditionalGeneration.from_pretrained(model_adi)
 
 def cevap_olustur(soru, log_df, faiss_endeksi, vektorleyici, tokenizer, model, k=4):
@@ -59,7 +59,7 @@ def cevap_olustur(soru, log_df, faiss_endeksi, vektorleyici, tokenizer, model, k
     mesafeler, indeksler = faiss_endeksi.search(soru_vektoru, k=k)
     getirilen_loglar = log_df.iloc[indeksler[0]]
 
-    # Log verilerinden ilgili bilgileri çıkararak cevap oluştur
+    # Log verilerinden ilgili bilgilerin çıkarılması  ve cevap oluşturulması
     if "what pages returned a 200 status" in soru.lower():
         ilgili_loglar = getirilen_loglar[getirilen_loglar['Durum_Kodu'] == 200]
         ilgili_bilgiler = ilgili_loglar['Istek'].tolist()
@@ -85,10 +85,10 @@ def cevap_olustur(soru, log_df, faiss_endeksi, vektorleyici, tokenizer, model, k
 
     return cevap.strip(), getirilen_loglar
 
-# Sistemi test et
+# Sistemin test edilme aşaması
 def sistemi_degerlendir(log_df, faiss_endeksi, vektorleyici, tokenizer, model):
     """
-    Sistemin doğruluğunu ve cevap kalitesini değerlendirmek için test soruları çalıştırır.
+    Sistemin doğruluğunun ve cevap kalitesini değerlendirmek için test soruları çalıştırır.
     """
     test_sorulari = [
         "What pages returned a 200 status?",
@@ -104,7 +104,7 @@ def sistemi_degerlendir(log_df, faiss_endeksi, vektorleyici, tokenizer, model):
         yanit_suresi, cevap = yanit_surelerini_olc(soru, log_df, faiss_endeksi, vektorleyici, tokenizer, model)
         yanit_sureleri.append(yanit_suresi)
         print(f"Answer:\n{cevap[0]}")
-        print(f"Getirilen Loglar:\n{cevap[1].to_string(index=False)}")  # Logları daha temiz bir formatta göster
+        print(f"Getirilen Loglar:\n{cevap[1].to_string(index=False)}")
         print(f"Response Time: {yanit_suresi:.4f} seconds\n")
 
     return yanit_sureleri
@@ -119,16 +119,16 @@ def yanit_surelerini_olc(soru, log_df, faiss_endeksi, vektorleyici, tokenizer, m
     yanit_suresi = bitis_zamani - baslangic_zamani
     return yanit_suresi, (cevap, getirilen_loglar)
 
-# Ortalama yanıt süresini hesapla
+# Sorulara verilen yanıt süresinin hesaplanması
 def ortalama_yanit_suresi_hesapla(yanit_sureleri):
     """
     Tüm sorular için ortalama yanıt süresini hesaplar.
     """
     return sum(yanit_sureleri) / len(yanit_sureleri)
 
-# Test soruları için yanıt sürelerini ölç ve ortalamayı hesapla
+# Test sorularına verilen yanıt sürelerinin ölçülmesi ve  ortalamasının hesaplanması
 yanit_sureleri = sistemi_degerlendir(log_df, faiss_endeksi, vektorleyici, tokenizer, model)
 ortalama_yanit_suresi = ortalama_yanit_suresi_hesapla(yanit_sureleri)
 
-# Ortalama yanıt süresi
+# Ortalama yanıt süresinin ekrana yazdırılması
 print(f"Average Response Time: {ortalama_yanit_suresi:.4f} seconds")
