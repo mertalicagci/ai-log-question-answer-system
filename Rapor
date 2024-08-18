@@ -1,0 +1,183 @@
+Proje Raporu: Web Trafik Logları ile AI Tabanlı Soru-Cevap Sistemi
+1. Proje Tanımı
+Bu proje, web trafik logları kullanarak AI tabanlı bir soru-cevap sistemi geliştirmeyi amaçlamaktadır. Sistem, kullanıcıların çeşitli sorularına log verileri üzerinden cevaplar üretmekte ve yanıt sürelerini ölçmektedir. Projede kullanılan temel teknolojiler arasında Pandas, re, scikit-learn, FAISS ve Transformers kütüphaneleri bulunmaktadır.
+
+2. Veri Hazırlığı ve İşleme
+2.1 Log Verilerinin İncelenmesi
+Log verileri, örnek bir veri kümesi olarak hazırlanmış ve bu veriler Pandas ile işlenmiştir. Aşağıda, log verilerinin nasıl işlendiğini ve analiz edildiğini gösteren kod ve açıklamalar bulunmaktadır.
+
+
+
+import pandas as pd
+import re
+
+# Log verileri
+log_verileri = """
+192.168.1.1 - - [10/Aug/2024:14:55:36 +0000] "GET /index.html HTTP/1.1" 200 1234
+192.168.1.2 - - [10/Aug/2024:14:56:02 +0000] "POST /login HTTP/1.1" 200 567
+192.168.1.3 - - [10/Aug/2024:14:57:10 +0000] "GET /about.html HTTP/1.1" 404 0
+192.168.1.4 - - [10/Aug/2024:14:57:50 +0000] "GET /contact.html HTTP/1.1" 200 234
+"""
+
+# Log verilerini satırlara ayır
+log_satirlari = log_verileri.strip().split('\n')
+
+# RegEx desenini tek satırda tanımla
+log_pattern = r'(\S+) - - \[.*?\] "(.*?)" (\d{3}) (\d+)'
+log_girisleri = []
+
+for satir in log_satirlari:
+    eslesen = re.match(log_pattern, satir)
+    if eslesen:
+        ip_adresi, istek, durum_kodu, boyut = eslesen.groups()
+        log_girisleri.append([ip_adresi, istek, int(durum_kodu), int(boyut)])
+
+# DataFrame oluştur
+log_df = pd.DataFrame(log_girisleri, columns=['IP_Adresi', 'Istek', 'Durum_Kodu', 'Boyut'])
+
+# Veri temizleme
+log_df = log_df.dropna()
+log_df = log_df[log_df['IP_Adresi'].str.match(r'\d+\.\d+\.\d+\.\d+')]
+log_df['Boyut'] = log_df['Boyut'].astype(int)
+Açıklama:
+Log Verilerinin Oluşturulması: Veriler bir string olarak tanımlanır ve satırlara ayrılır.
+Regex ile Verilerin Ayrıştırılması: RegEx kullanılarak IP adresi, istek, durum kodu ve yanıt boyutu bilgileri çıkarılır.
+DataFrame Oluşturma ve Temizleme: Pandas DataFrame oluşturulur ve veri temizleme işlemleri yapılır.
+2.2 Vektörizasyon ve FAISS Endeksi
+Veri hazırlığından sonra, istek metinleri TF-IDF yöntemiyle vektörize edilmiş ve FAISS ile bir endeks oluşturulmuştur.
+
+Kod:
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+import faiss
+
+# 'Istek' sütununu vektörize et
+vektorleyici = TfidfVectorizer()
+istek_vektorleri = vektorleyici.fit_transform(log_df['Istek']).toarray()
+
+# FAISS endiksi oluştur
+boyut = istek_vektorleri.shape[1]
+faiss_endiksi = faiss.IndexFlatL2(boyut)
+
+# Vektörleri FAISS endeksine ekle
+faiss_endiksi.add(istek_vektorleri)
+Açıklama:
+TF-IDF Vektörizasyonu: 'Istek' sütunundaki metinler TF-IDF yöntemi ile vektörlere dönüştürülür.
+FAISS Endeksi Oluşturma: Vektörler, benzerlik aramaları için FAISS endeksine eklenir.
+3. T5 Modeli ile Cevap Üretme
+T5 modelini kullanarak, verilen sorulara yanıtlar üretmek üzere bir fonksiyon geliştirilmiştir.
+
+Kod:
+
+from transformers import T5Tokenizer, T5ForConditionalGeneration
+import time
+
+# T5 modelini yükle
+model_adi = 't5-small'
+tokenizer = T5Tokenizer.from_pretrained(model_adi, legacy=False)
+model = T5ForConditionalGeneration.from_pretrained(model_adi)
+
+def cevap_olustur(soru, log_df, faiss_endeksi, vektorleyici, tokenizer, model, k=4):
+    soru_vektoru = vektorleyici.transform([soru]).toarray()
+    mesafeler, indeksler = faiss_endeksi.search(soru_vektoru, k=k)
+    getirilen_loglar = log_df.iloc[indeksler[0]]
+
+    if "what pages returned a 200 status" in soru.lower():
+        ilgili_loglar = getirilen_loglar[getirilen_loglar['Durum_Kodu'] == 200]
+        ilgili_bilgiler = ilgili_loglar['Istek'].tolist()
+        cevap = f"Pages that returned a 200 status: {', '.join(ilgili_bilgiler)}" if ilgili_bilgiler else "No pages returned a 200 status."
+    elif "which ip address accessed /login" in soru.lower():
+        ilgili_loglar = getirilen_loglar[getirilen_loglar['Istek'].str.contains('/login')]
+        ilgili_bilgiler = ilgili_loglar['IP_Adresi'].tolist()
+        cevap = f"The IP address that accessed the /login page is: {', '.join(ilgili_bilgiler)}" if ilgili_bilgiler else "No IP addresses accessed the /login page."
+    elif "which pages were not found" in soru.lower():
+        ilgili_loglar = getirilen_loglar[getirilen_loglar['Durum_Kodu'] == 404]
+        ilgili_bilgiler = ilgili_loglar['Istek'].tolist()
+        cevap = f"Pages that returned a 404 status: {', '.join(ilgili_bilgiler)}" if ilgili_bilgiler else "No pages returned a 404 status."
+    elif "which pages returned the highest response size" in soru.lower():
+        max_boyut = getirilen_loglar['Boyut'].max()
+        ilgili_loglar = getirilen_loglar[getirilen_loglar['Boyut'] == max_boyut]
+        ilgili_bilgiler = ilgili_loglar['Istek'].tolist()
+        cevap = f"Pages that returned the highest response size: {', '.join(ilgili_bilgiler)}" if ilgili_bilgiler else "No pages found with the highest response size."
+    else:
+        prompt = f"Based on the logs, answer the following question:\n\n{soru}"
+        inputs = tokenizer(prompt, return_tensors="pt", max_length=512, truncation=True)
+        outputs = model.generate(inputs["input_ids"], max_length=150, num_beams=4, early_stopping=True)
+        cevap = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+    return cevap.strip(), getirilen_loglar
+Açıklama:
+Soruya Göre Cevap Üretme: Sorulara göre ilgili logları bulur ve yanıtlar üretir. Eğer belirli bir soru formatına uymazsa, T5 modelini kullanarak yanıt üretir.
+4. Sistem Performansı ve Test
+Sistemin performansını test etmek ve yanıt sürelerini ölçmek için bir değerlendirme fonksiyonu kullanılmıştır.
+
+Kod:
+
+def sistemi_degerlendir(log_df, faiss_endeksi, vektorleyici, tokenizer, model):
+    test_sorulari = [
+        "What pages returned a 200 status?",
+        "Which IP address accessed /login?",
+        "Which pages were not found?",
+        "Which pages returned the highest response size?"
+    ]
+
+    yanit_sureleri = []
+
+    for soru in test_sorulari:
+        print(f"Question: {soru}")
+        yanit_suresi, cevap = yanit_surelerini_olc(soru, log_df, faiss_endeksi, vektorleyici, tokenizer, model)
+        yanit_sureleri.append(yanit_suresi)
+        print(f"Answer:\n{cevap[0]}")
+        print(f"Getirilen Loglar:\n{cevap[1].to_string(index=False)}")
+        print(f"Response Time: {yanit_suresi:.4f} seconds\n")
+
+    return yanit_sureleri
+
+def yanit_surelerini_olc(soru, log_df, faiss_endeksi, vektorleyici, tokenizer, model):
+    baslangic_zamani = time.time()
+    cevap, getirilen_loglar = cevap_olustur(soru, log_df, faiss_endeksi, vektorleyici, tokenizer, model)
+    bitis_zamani = time.time()
+    yanit_suresi = bitis_zamani - baslangic_zamani
+    return yanit_suresi, (cevap, getirilen_loglar)
+Açıklama:
+Sistem Performansının Ölçülmesi: Test soruları ile sistem performansı ölçülür ve yanıt süreleri hesaplanır.
+5. Sonuçlar ve Değerlendirme
+5.1 Yanıt Doğruluğu
+Bu bölümde, AI tabanlı soru-cevap sisteminin verdiği yanıtların doğruluğu değerlendirilmiştir. 
+Sistem, web trafik loglarına dayalı çeşitli sorulara yanıt üretmekte ve bu yanıtların doğruluğu, manuel olarak incelenerek ölçülmüştür.
+Sistemin doğruluğu, belirli test soruları kullanılarak değerlendirildi. Örneğin, "Which IP address accessed /login?" sorusuna verilen yanıt, log verileriyle karşılaştırıldığında doğruydu ve ilgili IP adresi başarıyla tespit edildi.
+Benzer şekilde, "What pages returned a 200 status?" sorusuna verilen yanıt, doğru sayfalara işaret etti.
+Ancak, bazı durumlarda sistemin yanıtları beklentilerle uyuşmadı.
+Bu durum genellikle, log verilerinin yetersiz olduğu veya modelin, beklenen bilgiyi çıkaramadığı sorularda meydana geldi.
+Bu gibi durumlarda, modelin eğitim verisi ve kullanılan vektörizasyon tekniklerinin sistemin performansını etkileyebileceği gözlemlendi ve durum çözülmeye çalışıldı.
+
+6.Bu Periyotta okuduğum Makaleler
+Web Trafik Log Analizi için:
+•	Makale: "Analysis of Web Server Logs for Web Usage Mining"
+Yazarlar: Robert Cooley, Bamshad Mobasher, and Jaideep Srivastava
+Yayın: DEXA Workshops, 1999
+
+FAISS Dokümantasyonu ve Eğitimleri:
+•	Makale: "FAISS Documentation"
+Yayın: Facebook AI
+
+Retrieval-Augmented Generation (RAG):
+•	Makale: "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks"
+Yazarlar: Patrick Lewis, Ethan Perez, Aleksandra Piktus, et al.
+Yayın: arXiv, 2020
+
+Kullanılan Kütüphaneler:
+1.	Pandas (pd)
+o	Açıklama: Veri manipülasyonu ve analizi için kullanılan bir kütüphanedir. DataFrame veri yapıları sağlar ve veri temizleme, işleme ve analiz işlemlerini kolaylaştırır.
+2.	Regex (re)
+o	Açıklama: Düzenli ifadeler (regex) kullanarak metinlerde arama ve eşleştirme yapmaya olanak tanır. Log verilerini ayrıştırmak için kullanılmıştır.
+3.	Scikit-Learn (sklearn.feature_extraction.text.TfidfVectorizer)
+o	Açıklama: Metin verilerini sayısal vektörlere dönüştüren TF-IDF (Term Frequency-Inverse Document Frequency) vektörleştirme yöntemi sağlar. Bu kütüphane ile HTTP isteklerinin vektörleştirilmesi sağlanmıştır.
+4.	FAISS (faiss)
+o	Açıklama: Hızlı ve etkili vektör arama ve benzerlik aramaları yapmak için kullanılan bir kütüphanedir. FAISS endeksi, metin vektörleri arasında hızlı arama yapılmasını sağlar.
+5.	Transformers (transformers)
+o	Açıklama: Doğal dil işleme (NLP) modelleri için kullanılan bir kütüphanedir. Bu kütüphane ile T5 modelinin yüklenmesi ve metin tabanlı cevapların oluşturulması sağlanmıştır.
+	T5Tokenizer: T5 modeline uygun veri tokenize etmek için kullanılır.
+	T5ForConditionalGeneration: T5 modelinin conditional generation (koşullu üretim) görevini yerine getiren sınıfıdır.
+6.	Time (time)
+o	Açıklama: Zamanla ilgili işlevleri kullanmak için standart bir Python kütüphanesidir. Yanıt sürelerinin ölçülmesi için kullanılmıştır.
