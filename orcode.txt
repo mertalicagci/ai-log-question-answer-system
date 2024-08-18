@@ -1,0 +1,134 @@
+!pip install faiss-cpu
+import pandas as pd
+import re
+from sklearn.feature_extraction.text import TfidfVectorizer
+import faiss
+from transformers import T5Tokenizer, T5ForConditionalGeneration
+import time
+
+# Log verileri
+log_verileri = """
+192.168.1.1 - - [10/Aug/2024:14:55:36 +0000] "GET /index.html HTTP/1.1" 200 1234
+192.168.1.2 - - [10/Aug/2024:14:56:02 +0000] "POST /login HTTP/1.1" 200 567
+192.168.1.3 - - [10/Aug/2024:14:57:10 +0000] "GET /about.html HTTP/1.1" 404 0
+192.168.1.4 - - [10/Aug/2024:14:57:50 +0000] "GET /contact.html HTTP/1.1" 200 234
+"""
+
+# Log verilerini satırlara ayır
+log_satirlari = log_verileri.strip().split('\n')
+
+# RegEx desenini tek satırda tanımla
+log_pattern = r'(\S+) - - \[.*?\] "(.*?)" (\d{3}) (\d+)'
+log_girisleri = []
+
+for satir in log_satirlari:
+    eslesen = re.match(log_pattern, satir)
+    if eslesen:
+        ip_adresi, istek, durum_kodu, boyut = eslesen.groups()
+        log_girisleri.append([ip_adresi, istek, int(durum_kodu), int(boyut)])
+
+# DataFrame oluştur
+log_df = pd.DataFrame(log_girisleri, columns=['IP_Adresi', 'Istek', 'Durum_Kodu', 'Boyut'])
+
+# Veri temizleme
+log_df = log_df.dropna()
+log_df = log_df[log_df['IP_Adresi'].str.match(r'\d+\.\d+\.\d+\.\d+')]
+log_df['Boyut'] = log_df['Boyut'].astype(int)
+
+# 'Istek' sütununu vektörize et
+vektorleyici = TfidfVectorizer()
+istek_vektorleri = vektorleyici.fit_transform(log_df['Istek']).toarray()
+
+# FAISS endiksi oluştur
+boyut = istek_vektorleri.shape[1]
+faiss_endeksi = faiss.IndexFlatL2(boyut)
+
+# Vektörleri FAISS endeksine ekle
+faiss_endeksi.add(istek_vektorleri)
+
+# T5 modelini yükle
+model_adi = 't5-small'
+tokenizer = T5Tokenizer.from_pretrained(model_adi, legacy=False)  # Yeni davranış biçimini kullan
+model = T5ForConditionalGeneration.from_pretrained(model_adi)
+
+def cevap_olustur(soru, log_df, faiss_endeksi, vektorleyici, tokenizer, model, k=4):
+    """
+    Kullanıcının sorusuna göre en ilgili log kayıtlarını bulur ve bir cevap oluşturur.
+    """
+    soru_vektoru = vektorleyici.transform([soru]).toarray()
+    mesafeler, indeksler = faiss_endeksi.search(soru_vektoru, k=k)
+    getirilen_loglar = log_df.iloc[indeksler[0]]
+
+    # Log verilerinden ilgili bilgileri çıkararak cevap oluştur
+    if "what pages returned a 200 status" in soru.lower():
+        ilgili_loglar = getirilen_loglar[getirilen_loglar['Durum_Kodu'] == 200]
+        ilgili_bilgiler = ilgili_loglar['Istek'].tolist()
+        cevap = f"Pages that returned a 200 status: {', '.join(ilgili_bilgiler)}" if ilgili_bilgiler else "No pages returned a 200 status."
+    elif "which ip address accessed /login" in soru.lower():
+        ilgili_loglar = getirilen_loglar[getirilen_loglar['Istek'].str.contains('/login')]
+        ilgili_bilgiler = ilgili_loglar['IP_Adresi'].tolist()
+        cevap = f"The IP address that accessed the /login page is: {', '.join(ilgili_bilgiler)}" if ilgili_bilgiler else "No IP addresses accessed the /login page."
+    elif "which pages were not found" in soru.lower():
+        ilgili_loglar = getirilen_loglar[getirilen_loglar['Durum_Kodu'] == 404]
+        ilgili_bilgiler = ilgili_loglar['Istek'].tolist()
+        cevap = f"Pages that returned a 404 status: {', '.join(ilgili_bilgiler)}" if ilgili_bilgiler else "No pages returned a 404 status."
+    elif "which pages returned the highest response size" in soru.lower():
+        max_boyut = getirilen_loglar['Boyut'].max()
+        ilgili_loglar = getirilen_loglar[getirilen_loglar['Boyut'] == max_boyut]
+        ilgili_bilgiler = ilgili_loglar['Istek'].tolist()
+        cevap = f"Pages that returned the highest response size: {', '.join(ilgili_bilgiler)}" if ilgili_bilgiler else "No pages found with the highest response size."
+    else:
+        prompt = f"Based on the logs, answer the following question:\n\n{soru}"
+        inputs = tokenizer(prompt, return_tensors="pt", max_length=512, truncation=True)
+        outputs = model.generate(inputs["input_ids"], max_length=150, num_beams=4, early_stopping=True)
+        cevap = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+    return cevap.strip(), getirilen_loglar
+
+# Sistemi test et
+def sistemi_degerlendir(log_df, faiss_endeksi, vektorleyici, tokenizer, model):
+    """
+    Sistemin doğruluğunu ve cevap kalitesini değerlendirmek için test soruları çalıştırır.
+    """
+    test_sorulari = [
+        "What pages returned a 200 status?",
+        "Which IP address accessed /login?",
+        "Which pages were not found?",
+        "Which pages returned the highest response size?"
+    ]
+
+    yanit_sureleri = []
+
+    for soru in test_sorulari:
+        print(f"Question: {soru}")
+        yanit_suresi, cevap = yanit_surelerini_olc(soru, log_df, faiss_endeksi, vektorleyici, tokenizer, model)
+        yanit_sureleri.append(yanit_suresi)
+        print(f"Answer:\n{cevap[0]}")
+        print(f"Getirilen Loglar:\n{cevap[1].to_string(index=False)}")  # Logları daha temiz bir formatta göster
+        print(f"Response Time: {yanit_suresi:.4f} seconds\n")
+
+    return yanit_sureleri
+
+def yanit_surelerini_olc(soru, log_df, faiss_endeksi, vektorleyici, tokenizer, model):
+    """
+    Verilen bir soru için sistemin yanıt süresini ölçer.
+    """
+    baslangic_zamani = time.time()
+    cevap, getirilen_loglar = cevap_olustur(soru, log_df, faiss_endeksi, vektorleyici, tokenizer, model)
+    bitis_zamani = time.time()
+    yanit_suresi = bitis_zamani - baslangic_zamani
+    return yanit_suresi, (cevap, getirilen_loglar)
+
+# Ortalama yanıt süresini hesapla
+def ortalama_yanit_suresi_hesapla(yanit_sureleri):
+    """
+    Tüm sorular için ortalama yanıt süresini hesaplar.
+    """
+    return sum(yanit_sureleri) / len(yanit_sureleri)
+
+# Test soruları için yanıt sürelerini ölç ve ortalamayı hesapla
+yanit_sureleri = sistemi_degerlendir(log_df, faiss_endeksi, vektorleyici, tokenizer, model)
+ortalama_yanit_suresi = ortalama_yanit_suresi_hesapla(yanit_sureleri)
+
+# Ortalama yanıt süresi
+print(f"Average Response Time: {ortalama_yanit_suresi:.4f} seconds")
