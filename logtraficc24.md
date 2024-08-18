@@ -1,0 +1,273 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "authorship_tag": "ABX9TyMf4M8zn35S1zUTO7b7upBZ",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/mertalicagci/ai-log-question-answer-system/blob/main/logtraficc24.md\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "ZMZ4X3IYgw8n",
+        "outputId": "a7e3e99f-ed71-4fcc-c487-091e0f465658"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Requirement already satisfied: faiss-cpu in /usr/local/lib/python3.10/dist-packages (1.8.0.post1)\n",
+            "Requirement already satisfied: numpy<2.0,>=1.0 in /usr/local/lib/python3.10/dist-packages (from faiss-cpu) (1.26.4)\n",
+            "Requirement already satisfied: packaging in /usr/local/lib/python3.10/dist-packages (from faiss-cpu) (24.1)\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "Special tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Question: What pages returned a 200 status?\n",
+            "Answer:\n",
+            "Pages that returned a 200 status: GET /index.html HTTP/1.1, POST /login HTTP/1.1, GET /contact.html HTTP/1.1\n",
+            "Getirilen Loglar:\n",
+            "  IP_Adresi                      Istek  Durum_Kodu  Boyut\n",
+            "192.168.1.1   GET /index.html HTTP/1.1         200   1234\n",
+            "192.168.1.2       POST /login HTTP/1.1         200    567\n",
+            "192.168.1.3   GET /about.html HTTP/1.1         404      0\n",
+            "192.168.1.4 GET /contact.html HTTP/1.1         200    234\n",
+            "Response Time: 0.0235 seconds\n",
+            "\n",
+            "Question: Which IP address accessed /login?\n",
+            "Answer:\n",
+            "The IP address that accessed the /login page is: 192.168.1.2\n",
+            "Getirilen Loglar:\n",
+            "  IP_Adresi                      Istek  Durum_Kodu  Boyut\n",
+            "192.168.1.2       POST /login HTTP/1.1         200    567\n",
+            "192.168.1.1   GET /index.html HTTP/1.1         200   1234\n",
+            "192.168.1.4 GET /contact.html HTTP/1.1         200    234\n",
+            "192.168.1.3   GET /about.html HTTP/1.1         404      0\n",
+            "Response Time: 0.0108 seconds\n",
+            "\n",
+            "Question: Which pages were not found?\n",
+            "Answer:\n",
+            "Pages that returned a 404 status: GET /about.html HTTP/1.1\n",
+            "Getirilen Loglar:\n",
+            "  IP_Adresi                      Istek  Durum_Kodu  Boyut\n",
+            "192.168.1.1   GET /index.html HTTP/1.1         200   1234\n",
+            "192.168.1.2       POST /login HTTP/1.1         200    567\n",
+            "192.168.1.3   GET /about.html HTTP/1.1         404      0\n",
+            "192.168.1.4 GET /contact.html HTTP/1.1         200    234\n",
+            "Response Time: 0.0045 seconds\n",
+            "\n",
+            "Question: Which pages returned the highest response size?\n",
+            "Answer:\n",
+            "Pages that returned the highest response size: GET /index.html HTTP/1.1\n",
+            "Getirilen Loglar:\n",
+            "  IP_Adresi                      Istek  Durum_Kodu  Boyut\n",
+            "192.168.1.1   GET /index.html HTTP/1.1         200   1234\n",
+            "192.168.1.2       POST /login HTTP/1.1         200    567\n",
+            "192.168.1.3   GET /about.html HTTP/1.1         404      0\n",
+            "192.168.1.4 GET /contact.html HTTP/1.1         200    234\n",
+            "Response Time: 0.0087 seconds\n",
+            "\n",
+            "Average Response Time: 0.0119 seconds\n"
+          ]
+        }
+      ],
+      "source": [
+        "!pip install faiss-cpu\n",
+        "import pandas as pd\n",
+        "import re\n",
+        "from sklearn.feature_extraction.text import TfidfVectorizer\n",
+        "import faiss\n",
+        "from transformers import T5Tokenizer, T5ForConditionalGeneration\n",
+        "import time\n",
+        "\n",
+        "# Log verileri\n",
+        "log_verileri = \"\"\"\n",
+        "192.168.1.1 - - [10/Aug/2024:14:55:36 +0000] \"GET /index.html HTTP/1.1\" 200 1234\n",
+        "192.168.1.2 - - [10/Aug/2024:14:56:02 +0000] \"POST /login HTTP/1.1\" 200 567\n",
+        "192.168.1.3 - - [10/Aug/2024:14:57:10 +0000] \"GET /about.html HTTP/1.1\" 404 0\n",
+        "192.168.1.4 - - [10/Aug/2024:14:57:50 +0000] \"GET /contact.html HTTP/1.1\" 200 234\n",
+        "\"\"\"\n",
+        "\n",
+        "# Log verilerini satırlara ayır\n",
+        "log_satirlari = log_verileri.strip().split('\\n')\n",
+        "\n",
+        "# RegEx desenini tek satırda tanımla\n",
+        "log_pattern = r'(\\S+) - - \\[.*?\\] \"(.*?)\" (\\d{3}) (\\d+)'\n",
+        "log_girisleri = []\n",
+        "\n",
+        "for satir in log_satirlari:\n",
+        "    eslesen = re.match(log_pattern, satir)\n",
+        "    if eslesen:\n",
+        "        ip_adresi, istek, durum_kodu, boyut = eslesen.groups()\n",
+        "        log_girisleri.append([ip_adresi, istek, int(durum_kodu), int(boyut)])\n",
+        "\n",
+        "# DataFrame oluştur\n",
+        "log_df = pd.DataFrame(log_girisleri, columns=['IP_Adresi', 'Istek', 'Durum_Kodu', 'Boyut'])\n",
+        "\n",
+        "# Veri temizleme\n",
+        "log_df = log_df.dropna()\n",
+        "log_df = log_df[log_df['IP_Adresi'].str.match(r'\\d+\\.\\d+\\.\\d+\\.\\d+')]\n",
+        "log_df['Boyut'] = log_df['Boyut'].astype(int)\n",
+        "\n",
+        "# 'Istek' sütununu vektörize et\n",
+        "vektorleyici = TfidfVectorizer()\n",
+        "istek_vektorleri = vektorleyici.fit_transform(log_df['Istek']).toarray()\n",
+        "\n",
+        "# FAISS endiksi oluştur\n",
+        "boyut = istek_vektorleri.shape[1]\n",
+        "faiss_endeksi = faiss.IndexFlatL2(boyut)\n",
+        "\n",
+        "# Vektörleri FAISS endeksine ekle\n",
+        "faiss_endeksi.add(istek_vektorleri)\n",
+        "\n",
+        "# T5 modelini yükle\n",
+        "model_adi = 't5-small'\n",
+        "tokenizer = T5Tokenizer.from_pretrained(model_adi, legacy=False)  # Yeni davranış biçimini kullan\n",
+        "model = T5ForConditionalGeneration.from_pretrained(model_adi)\n",
+        "\n",
+        "def cevap_olustur(soru, log_df, faiss_endeksi, vektorleyici, tokenizer, model, k=4):\n",
+        "    \"\"\"\n",
+        "    Kullanıcının sorusuna göre en ilgili log kayıtlarını bulur ve bir cevap oluşturur.\n",
+        "    \"\"\"\n",
+        "    soru_vektoru = vektorleyici.transform([soru]).toarray()\n",
+        "    mesafeler, indeksler = faiss_endeksi.search(soru_vektoru, k=k)\n",
+        "    getirilen_loglar = log_df.iloc[indeksler[0]]\n",
+        "\n",
+        "    # Log verilerinden ilgili bilgileri çıkararak cevap oluştur\n",
+        "    if \"what pages returned a 200 status\" in soru.lower():\n",
+        "        ilgili_loglar = getirilen_loglar[getirilen_loglar['Durum_Kodu'] == 200]\n",
+        "        ilgili_bilgiler = ilgili_loglar['Istek'].tolist()\n",
+        "        cevap = f\"Pages that returned a 200 status: {', '.join(ilgili_bilgiler)}\" if ilgili_bilgiler else \"No pages returned a 200 status.\"\n",
+        "    elif \"which ip address accessed /login\" in soru.lower():\n",
+        "        ilgili_loglar = getirilen_loglar[getirilen_loglar['Istek'].str.contains('/login')]\n",
+        "        ilgili_bilgiler = ilgili_loglar['IP_Adresi'].tolist()\n",
+        "        cevap = f\"The IP address that accessed the /login page is: {', '.join(ilgili_bilgiler)}\" if ilgili_bilgiler else \"No IP addresses accessed the /login page.\"\n",
+        "    elif \"which pages were not found\" in soru.lower():\n",
+        "        ilgili_loglar = getirilen_loglar[getirilen_loglar['Durum_Kodu'] == 404]\n",
+        "        ilgili_bilgiler = ilgili_loglar['Istek'].tolist()\n",
+        "        cevap = f\"Pages that returned a 404 status: {', '.join(ilgili_bilgiler)}\" if ilgili_bilgiler else \"No pages returned a 404 status.\"\n",
+        "    elif \"which pages returned the highest response size\" in soru.lower():\n",
+        "        max_boyut = getirilen_loglar['Boyut'].max()\n",
+        "        ilgili_loglar = getirilen_loglar[getirilen_loglar['Boyut'] == max_boyut]\n",
+        "        ilgili_bilgiler = ilgili_loglar['Istek'].tolist()\n",
+        "        cevap = f\"Pages that returned the highest response size: {', '.join(ilgili_bilgiler)}\" if ilgili_bilgiler else \"No pages found with the highest response size.\"\n",
+        "    else:\n",
+        "        prompt = f\"Based on the logs, answer the following question:\\n\\n{soru}\"\n",
+        "        inputs = tokenizer(prompt, return_tensors=\"pt\", max_length=512, truncation=True)\n",
+        "        outputs = model.generate(inputs[\"input_ids\"], max_length=150, num_beams=4, early_stopping=True)\n",
+        "        cevap = tokenizer.decode(outputs[0], skip_special_tokens=True)\n",
+        "\n",
+        "    return cevap.strip(), getirilen_loglar\n",
+        "\n",
+        "# Sistemi test et\n",
+        "def sistemi_degerlendir(log_df, faiss_endeksi, vektorleyici, tokenizer, model):\n",
+        "    \"\"\"\n",
+        "    Sistemin doğruluğunu ve cevap kalitesini değerlendirmek için test soruları çalıştırır.\n",
+        "    \"\"\"\n",
+        "    test_sorulari = [\n",
+        "        \"What pages returned a 200 status?\",\n",
+        "        \"Which IP address accessed /login?\",\n",
+        "        \"Which pages were not found?\",\n",
+        "        \"Which pages returned the highest response size?\"\n",
+        "    ]\n",
+        "\n",
+        "    yanit_sureleri = []\n",
+        "\n",
+        "    for soru in test_sorulari:\n",
+        "        print(f\"Question: {soru}\")\n",
+        "        yanit_suresi, cevap = yanit_surelerini_olc(soru, log_df, faiss_endeksi, vektorleyici, tokenizer, model)\n",
+        "        yanit_sureleri.append(yanit_suresi)\n",
+        "        print(f\"Answer:\\n{cevap[0]}\")\n",
+        "        print(f\"Getirilen Loglar:\\n{cevap[1].to_string(index=False)}\")  # Logları daha temiz bir formatta göster\n",
+        "        print(f\"Response Time: {yanit_suresi:.4f} seconds\\n\")\n",
+        "\n",
+        "    return yanit_sureleri\n",
+        "\n",
+        "def yanit_surelerini_olc(soru, log_df, faiss_endeksi, vektorleyici, tokenizer, model):\n",
+        "    \"\"\"\n",
+        "    Verilen bir soru için sistemin yanıt süresini ölçer.\n",
+        "    \"\"\"\n",
+        "    baslangic_zamani = time.time()\n",
+        "    cevap, getirilen_loglar = cevap_olustur(soru, log_df, faiss_endeksi, vektorleyici, tokenizer, model)\n",
+        "    bitis_zamani = time.time()\n",
+        "    yanit_suresi = bitis_zamani - baslangic_zamani\n",
+        "    return yanit_suresi, (cevap, getirilen_loglar)\n",
+        "\n",
+        "# Ortalama yanıt süresini hesapla\n",
+        "def ortalama_yanit_suresi_hesapla(yanit_sureleri):\n",
+        "    \"\"\"\n",
+        "    Tüm sorular için ortalama yanıt süresini hesaplar.\n",
+        "    \"\"\"\n",
+        "    return sum(yanit_sureleri) / len(yanit_sureleri)\n",
+        "\n",
+        "# Test soruları için yanıt sürelerini ölç ve ortalamayı hesapla\n",
+        "yanit_sureleri = sistemi_degerlendir(log_df, faiss_endeksi, vektorleyici, tokenizer, model)\n",
+        "ortalama_yanit_suresi = ortalama_yanit_suresi_hesapla(yanit_sureleri)\n",
+        "\n",
+        "# Ortalama yanıt süresi\n",
+        "print(f\"Average Response Time: {ortalama_yanit_suresi:.4f} seconds\")\n"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "i34zYSPhr1CQ"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "OKRs4dFKsWQv"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "V_jMqsS-sWga"
+      },
+      "execution_count": null,
+      "outputs": []
+    }
+  ]
+}
