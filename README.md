@@ -3,7 +3,7 @@
 
 Trafik Logları AI Soru-Cevap Sistemi
 
-Proje Açıklaması
+### Proje Açıklaması
 
 Bu proje, web trafik günlüklerini kullanarak AI tabanlı bir soru-cevap sisteminin geliştirilmesini içerir. Sistem, verilen web trafik günlüklerine dayalı olarak soruları yanıtlamak için bir Retrieval-Augmented Generation (RAG) modelini kullanır. Proje, veri hazırlığı ve ön işleme, RAG model kurulumunu, sistem entegrasyonunu ve testini içerir.
 
@@ -60,18 +60,6 @@ main.py: Projenin ana çalışma dosyası.
 
 Proje, web trafik günlükleri üzerinden çeşitli soruları yanıtlamak için kullanılabilir. Örnek bir soru ve yanıt işlemi aşağıdaki gibidir:
 
+# İletişim
 
-# Kod
-
-question = "Which IP address accessed /login?"
-
-answer = get_answer(question)
-
-print(answer)
-
-*Testler
- Projede yer alan testler, modelin performansını ve yanıt doğruluğunu değerlendirmek için yapılmıştır. Testler hakkında daha fazla bilgiye tests/ dizininde bulunan dosyalardan ulaşabilirsiniz.
-
-
-İletişim
 Proje ile ilgili sorularınız veya geri bildirimleriniz için cagcimertali@gmail.com adresine ulaşabilirsiniz.
