@@ -157,6 +157,8 @@ def yanit_surelerini_olc(soru, log_df, faiss_endeksi, vektorleyici, tokenizer, m
     return yanit_suresi, (cevap, getirilen_loglar)
 Açıklama:
 Sistem Performansının Ölçülmesi: Test soruları ile sistem performansı ölçülür ve yanıt süreleri hesaplanır.
+//buraya karsılastıgım zorlukları yazacam
+
 5. Sonuçlar ve Değerlendirme
 5.1 Yanıt Doğruluğu
 Bu bölümde, AI tabanlı soru-cevap sisteminin verdiği yanıtların doğruluğu değerlendirilmiştir. 
