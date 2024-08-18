@@ -151,7 +151,7 @@ Ancak, bazı durumlarda sistemin yanıtları beklentilerle uyuşmadı.
 Bu durum genellikle, log verilerinin yetersiz olduğu veya modelin, beklenen bilgiyi çıkaramadığı sorularda meydana geldi.
 Bu gibi durumlarda, modelin eğitim verisi ve kullanılan vektörizasyon tekniklerinin sistemin performansını etkileyebileceği gözlemlendi ve durum çözülmeye çalışıldı.
 
-6.Bu Periyotta okuduğum Makaleler
+6. Referanslar
 Web Trafik Log Analizi için:
 •	Makale: "Analysis of Web Server Logs for Web Usage Mining"
 Yazarlar: Robert Cooley, Bamshad Mobasher, and Jaideep Srivastava
