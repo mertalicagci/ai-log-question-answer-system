@@ -1,6 +1,9 @@
 ai-log-question-answer-system
+
 Trafik Logları AI Soru-Cevap Sistemi
+
 Proje Açıklaması
+
 Bu proje, web trafik günlüklerini kullanarak AI tabanlı bir soru-cevap sisteminin geliştirilmesini içerir. Sistem, verilen web trafik günlüklerine dayalı olarak soruları yanıtlamak için bir Retrieval-Augmented Generation (RAG) modelini kullanır. Proje, veri hazırlığı ve ön işleme, RAG model kurulumunu, sistem entegrasyonunu ve testini içerir.
 
 Proje Adımları
