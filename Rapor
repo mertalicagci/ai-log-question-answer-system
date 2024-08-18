@@ -19,7 +19,7 @@ o	Açıklama: Doğal dil işleme (NLP) modelleri için kullanılan bir kütüpha
 o	Açıklama: Zamanla ilgili işlevleri kullanmak için standart bir Python kütüphanesidir. Yanıt sürelerinin ölçülmesi için kullanılmıştır.
 
 3. Veri Hazırlığı ve İşleme
-2.1 Log Verilerinin İncelenmesi
+3.1 Log Verilerinin İncelenmesi
 Log verileri, örnek bir veri kümesi olarak hazırlanmış ve bu veriler Pandas ile işlenmiştir. Aşağıda, log verilerinin nasıl işlendiğini ve analiz edildiğini gösteren kod ve açıklamalar bulunmaktadır.
 
 
