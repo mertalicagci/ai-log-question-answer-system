@@ -56,10 +56,6 @@ utils.py: Yardımcı işlevler ve veri işlemleri.
 
 main.py: Projenin ana çalışma dosyası.
 
-*Kullanım
-
-Proje, web trafik günlükleri üzerinden çeşitli soruları yanıtlamak için kullanılabilir. Örnek bir soru ve yanıt işlemi aşağıdaki gibidir:
-
 # İletişim
 
 Proje ile ilgili sorularınız veya geri bildirimleriniz için cagcimertali@gmail.com adresine ulaşabilirsiniz.
